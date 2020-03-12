@@ -14,9 +14,9 @@ setuptools.setup(
     licence="Apache License 2.0",
     url="https://github.com/lescientifik/pubmedy",
     packages=setuptools.find_packages(),
+    install_requires=["biopython"],
     classifiers=[
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Healthcare Industry",
