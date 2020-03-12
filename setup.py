@@ -24,5 +24,5 @@ setuptools.setup(
         "Topic :: Scientific/Engineering :: Medical Science Apps.",
     ],
     python_requires=">=3.8",
-    entry_points={"console_scripts": ["pumedy = segmentator.main:main"]},
+    entry_points={"console_scripts": ["pubmedy = pubmedy.main:cli"]},
 )

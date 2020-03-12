@@ -11,7 +11,7 @@ pip install git+https://github.com/lescientifik/pubmedy.git
 If you want to install it in dev mode:
 
 ```bash
-pip install -e git+https://github.com/lescientifik/pubmedy.git
+pip install -e git+https://github.com/lescientifik/pubmedy.git#egg=pubmedy
 ```
 
 ## Usage:

@@ -66,6 +66,10 @@ def main(email: str, search_string: str, output_file: str):
     log.info("Csv output written at %s", output_file + ".csv")
 
 
-if __name__ == "__main__":
+def cli():
     args = parser.parse_args()
     main(args.email, args.search, args.outfile)
+
+
+if __name__ == "__main__":
+    cli()
