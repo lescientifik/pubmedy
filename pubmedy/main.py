@@ -46,24 +46,25 @@ def main(email: str, search_string: str, output_file: str):
     search_record = Entrez.read(search_handle)
     search_handle.close()
     log.info("Found %s articles", len(search_record["IdList"]))
-    start = time.perf_counter()
-    results_handle = Entrez.efetch(
-        db="pubmed", id=search_record["IdList"], retmode="xml",
-    )
-    records = Entrez.read(results_handle)
-    log.info("Retrieved records in %s sec", time.perf_counter() - start)
-    start = time.perf_counter()
-    processed_records = [
-        extract_record_infos(record) for record in records["PubmedArticle"]
-    ]
-    log.info("Record processed in %s sec", time.perf_counter() - start)
-    results_handle.close()
-    keys = processed_records[0].keys()
-    with open(output_file + ".csv", "w") as out_csv:
-        dict_writer = csv.DictWriter(out_csv, keys, quoting=csv.QUOTE_ALL)
-        dict_writer.writeheader()
-        dict_writer.writerows(processed_records)
-    log.info("Csv output written at %s", output_file + ".csv")
+    if search_record["IdList"]:
+        start = time.perf_counter()
+        results_handle = Entrez.efetch(
+            db="pubmed", id=search_record["IdList"], retmode="xml",
+        )
+        records = Entrez.read(results_handle)
+        log.info("Retrieved records in %s sec", time.perf_counter() - start)
+        start = time.perf_counter()
+        processed_records = [
+            extract_record_infos(record) for record in records["PubmedArticle"]
+        ]
+        log.info("Record processed in %s sec", time.perf_counter() - start)
+        results_handle.close()
+        keys = processed_records[0].keys()
+        with open(output_file + ".csv", "w") as out_csv:
+            dict_writer = csv.DictWriter(out_csv, keys, quoting=csv.QUOTE_ALL)
+            dict_writer.writeheader()
+            dict_writer.writerows(processed_records)
+        log.info("Csv output written at %s", output_file + ".csv")
 
 
 def cli():
