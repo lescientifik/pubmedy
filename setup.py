@@ -4,8 +4,8 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="segmentator",  # Replace with your own username
-    version="0.0.5",
+    name="Pubmedy",  # Replace with your own username
+    version="0.0.1",
     author="Théophraste HENRY",
     author_email="theophraste.henry@gmail.com",
     description="A lightweight Biopython-based interface to NCBI's Entrez API, created to speed up systematic literature reviews",
