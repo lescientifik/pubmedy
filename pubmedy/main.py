@@ -61,7 +61,9 @@ def main(email: str, search_string: str, output_file: str):
         results_handle.close()
         keys = processed_records[0].keys()
         with open(output_file + ".csv", "w") as out_csv:
-            dict_writer = csv.DictWriter(out_csv, keys, quoting=csv.QUOTE_ALL)
+            dict_writer = csv.DictWriter(
+                out_csv, keys, quoting=csv.QUOTE_ALL, delimiter=";"
+            )
             dict_writer.writeheader()
             dict_writer.writerows(processed_records)
         log.info("Csv output written at %s", output_file + ".csv")
