@@ -14,6 +14,14 @@ If you want to install it in dev mode:
 pip install -e git+https://github.com/lescientifik/pubmedy.git#egg=pubmedy
 ```
 
+Or simpler, in the directory of your choice:
+
+```bash
+git clone https://github.com/lescientifik/pubmedy.git
+cd pubmedy
+pip install -e .
+```
+
 ## Usage:
 
 ```
