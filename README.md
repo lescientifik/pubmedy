@@ -1,8 +1,8 @@
 # Pubmedy
-A lightweight Biopython-based interface to NCBI's Entrez API, created to speed up systematic literature reviews
+A lightweight Biopython-based interface to NCBI's Entrez API, created to speed up systematic literature reviews.
 
 
-## Installation
+## Installation:
 
 ```bash
 pip install git+https://github.com/lescientifik/pubmedy.git
