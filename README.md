@@ -25,7 +25,7 @@ pip install -e .
 ## Usage:
 
 ```
-usage: Pubmedy [-h] --email EMAIL -s SEARCH -o OUTFILE
+usage: pubmedy [-h] --email EMAIL -s SEARCH -o OUTFILE
 
 A CLI to query the Pubmed API and save the results. At the end, you get back 2
 files:a logfile to keep track of your query and a csv file
