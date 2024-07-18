@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pubmedy - PubMed Literature Search Tool</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.3.4/axios.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-r from-blue-50 to-indigo-100 min-h-screen">
+     <!-- Bandeau de branding -->
+     <!-- Bandeau de branding -->
+    <div class="bg-indigo-700 text-white py-4 px-6 shadow-md">
+        <h1 class="text-3xl font-bold">Pubmedy</h1>
+    </div>
+
+    <div id="search-container" class="container mx-auto px-4 py-8 max-w-6xl transition-all">
+        <h2 class="text-2xl font-bold text-center text-gray-800 mb-8">PubMed Literature Search Tool</h2>
+        
+         <!-- Search input and buttons -->
+         <div id="search-box" class="mb-6 flex flex-col md:flex-row gap-4 justify-center items-center transition-all">
+            <input type="text" id="searchInput" placeholder="Enter search terms" class="w-full md:w-2/3 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-300">
+            <button onclick="searchPubMed()" class="w-full md:w-auto bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition duration-300 shadow-md">Search</button>
+            <button id="exportButton" onclick="exportAllToCSV()" class="w-full md:w-auto bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition duration-300 shadow-md">Export CSV</button>
+        </div>
+
+        <!-- Total results and pagination -->
+        <div id="totalResults" class="text-center text-lg text-gray-700 mb-4"></div>
+        <div id="topPagination" class="mb-6 flex justify-center items-center space-x-4"></div>
+
+        <!-- Results -->
+        <div id="results" class="space-y-8"></div>
+
+        <!-- Bottom pagination -->
+        <div id="bottomPagination" class="mt-6 flex justify-center items-center space-x-4"></div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/';
+        let currentPage = 0;
+        let totalResults = 0;
+        let allArticles = [];
+        const RESULTS_PER_PAGE = 10;
+
+        let isInitialState = true;
+
+        async function searchPubMed(page = 0) {
+            if (isInitialState) {
+                document.getElementById('search-container').classList.remove('h-screen', 'flex', 'flex-col', 'justify-center');
+                document.getElementById('search-box').classList.remove('items-center');
+                isInitialState = false;
+            }
+            const searchTerm = document.getElementById('searchInput').value;
+            const email = "pumbedy@pubmedy.com";
+            const resultsDiv = document.getElementById('results');
+            const totalResultsDiv = document.getElementById('totalResults');
+            const topPaginationDiv = document.getElementById('topPagination');
+            const bottomPaginationDiv = document.getElementById('bottomPagination');
+
+            // Clear previous results and UI elements
+            resultsDiv.innerHTML = '<div class="text-center text-xl text-gray-600">Searching...</div>';
+            totalResultsDiv.textContent = '';
+            topPaginationDiv.innerHTML = '';
+            bottomPaginationDiv.innerHTML = '';
+
+            
+
+            try {
+                const searchResponse = await axios.get(`${API_BASE_URL}esearch.fcgi`, {
+                    params: {
+                        db: 'pubmed',
+                        term: searchTerm,
+                        retmax: RESULTS_PER_PAGE,
+                        retstart: page * RESULTS_PER_PAGE,
+                        format: 'json',
+                        email: email
+                    }
+                });
+
+                console.log('Search response:', searchResponse.data);  // Debugging log
+
+                const ids = searchResponse.data.esearchresult.idlist;
+                totalResults = parseInt(searchResponse.data.esearchresult.count);
+
+                if (ids.length === 0) {
+                    resultsDiv.innerHTML = '<div class="text-center text-xl text-gray-600">No results found.</div>';
+                    totalResultsDiv.textContent = 'No results found';
+                    return;
+                }
+
+                totalResultsDiv.textContent = `Total results: ${totalResults}`;
+
+                const summaryResponse = await axios.get(`${API_BASE_URL}esummary.fcgi`, {
+                    params: {
+                        db: 'pubmed',
+                        id: ids.join(','),
+                        format: 'json',
+                        email: email
+                    }
+                });
+
+                console.log('Summary response:', summaryResponse.data);  // Debugging log
+
+                const abstractResponse = await axios.get(`${API_BASE_URL}efetch.fcgi`, {
+                    params: {
+                        db: 'pubmed',
+                        id: ids.join(','),
+                        rettype: 'abstract',
+                        retmode: 'xml',
+                        email: email
+                    }
+                });
+
+                console.log('Abstract response:', abstractResponse.data);  // Debugging log
+
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(abstractResponse.data, "text/xml");
+                const articleSet = xmlDoc.getElementsByTagName("PubmedArticle");
+
+                const articles = ids.map(id => {
+                    const articleData = summaryResponse.data.result[id];
+                    const articleXml = Array.from(articleSet).find(article => article.querySelector("PMID").textContent === id);
+                    const abstractText = articleXml ? extractFullAbstract(articleXml) : "Abstract not available";
+
+                    return {
+                        uid: id,
+                        title: articleData.title,
+                        authors: articleData.authors,
+                        fulljournalname: articleData.fulljournalname,
+                        pubdate: articleData.pubdate,
+                        parsedAbstract: abstractText
+                    };
+                });
+
+                allArticles = allArticles.concat(articles);
+
+                displayResults(articles);
+                displayPagination();
+                window.scrollTo(0, 0);
+
+            } catch (error) {
+                console.error('Error details:', error);
+                let errorMessage = 'An error occurred while fetching results. ';
+                if (error.response) {
+                    errorMessage += `Server responded with status ${error.response.status}: ${error.response.data}`;
+                    console.error('Error response:', error.response);
+                } else if (error.request) {
+                    errorMessage += 'No response received from the server.';
+                    console.error('Error request:', error.request);
+                } else {
+                    errorMessage += error.message;
+                }
+                resultsDiv.innerHTML = `<div class="text-center text-xl text-red-600">${errorMessage}</div>`;
+                totalResultsDiv.textContent = 'Error occurred';
+            }
+        }
+
+        function extractFullAbstract(articleXml) {
+            const abstractElement = articleXml.querySelector("Abstract");
+            if (!abstractElement) return "Abstract not available";
+
+            const abstractTexts = abstractElement.querySelectorAll("AbstractText");
+            if (abstractTexts.length === 0) return "Abstract not available";
+
+            if (abstractTexts.length === 1) {
+                return abstractTexts[0].textContent;
+            } else {
+                return Array.from(abstractTexts).map(section => {
+                    const label = section.getAttribute("Label");
+                    return label ? `<strong class="text-indigo-600">${label}:</strong> ${section.textContent}` : section.textContent;
+                }).join("<br><br>");
+            }
+        }
+
+        const truncate_length = 1000
+
+        function displayResults(articles) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = articles.map((article, index) => {
+                const abstractText = article.parsedAbstract;
+                const isShortAbstract = abstractText.length <= truncate_length;
+                const truncatedAbstract = isShortAbstract ? abstractText : abstractText.substring(0, truncate_length) + "...";
+                
+                return `
+                    <div class="bg-white rounded-xl shadow-lg overflow-hidden transform transition duration-500 hover:shadow-xl">
+                        <div class="p-6">
+                            <h3 class="text-xl font-semibold mb-3 text-gray-800">${article.title}</h3>
+                            <p class="text-sm text-gray-600 mb-2">
+                                <span class="font-medium text-indigo-600">Authors:</span> 
+                                ${article.authors.map(author => author.name).join(', ')}
+                            </p>
+                            <p class="text-sm text-gray-600 mb-2">
+                                <span class="font-medium text-indigo-600">Journal:</span> 
+                                ${article.fulljournalname}
+                            </p>
+                            <p class="text-sm text-gray-600 mb-4">
+                                <span class="font-medium text-indigo-600">Publication Date:</span> 
+                                ${article.pubdate}
+                            </p>
+                            <div class="mb-4">
+                                <h4 class="font-semibold text-indigo-600 mb-2">Abstract:</h4>
+                                <p class="text-sm text-gray-700 abstract-content" id="abstract-${index}">${truncatedAbstract}</p>
+                                ${!isShortAbstract ? `<button onclick="toggleAbstract(${index})" class="text-blue-600 hover:text-blue-800 text-sm mt-2 focus:outline-none" id="view-more-${index}">View More</button>` : ''}
+                            </div>
+                            <a href="https://pubmed.ncbi.nlm.nih.gov/${article.uid}" target="_blank" class="inline-block bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition duration-300">View on PubMed</a>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function toggleAbstract(index) {
+            const abstractElement = document.getElementById(`abstract-${index}`);
+            const viewMoreButton = document.getElementById(`view-more-${index}`);
+            const fullAbstract = allArticles[index].parsedAbstract;
+
+            if (abstractElement.textContent.length <= truncate_length + 3) {  // truncate_length + "..."
+                abstractElement.innerHTML = fullAbstract;
+                viewMoreButton.textContent = "View Less";
+            } else {
+                abstractElement.innerHTML = fullAbstract.substring(0, truncate_length) + "...";
+                viewMoreButton.textContent = "View More";
+            }
+        }
+
+        function displayPagination() {
+            const topPaginationDiv = document.getElementById('topPagination');
+            const bottomPaginationDiv = document.getElementById('bottomPagination');
+            const totalPages = Math.ceil(totalResults / RESULTS_PER_PAGE);
+            let paginationHTML = '';
+
+            if (currentPage > 0) {
+                paginationHTML += `<button onclick="changePage(${currentPage - 1})" class="bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg hover:bg-indigo-200 transition duration-300">Previous</button>`;
+            }
+
+            paginationHTML += `<span class="text-gray-700 font-medium">Page ${currentPage + 1} of ${totalPages}</span>`;
+
+            if (currentPage < totalPages - 1) {
+                paginationHTML += `<button onclick="changePage(${currentPage + 1})" class="bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg hover:bg-indigo-200 transition duration-300">Next</button>`;
+            }
+
+            topPaginationDiv.innerHTML = paginationHTML;
+            bottomPaginationDiv.innerHTML = paginationHTML;
+        }
+
+        function changePage(newPage) {
+            currentPage = newPage;
+            searchPubMed(currentPage);
+        }
+
+        async function exportAllToCSV() {
+            const exportButton = document.getElementById('exportButton');
+            const originalText = exportButton.textContent;
+            exportButton.innerHTML = '<svg class="animate-spin h-5 w-5 mr-3 inline-block" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Exporting...';
+            exportButton.disabled = true;
+
+            const searchTerm = document.getElementById('searchInput').value;
+            const email = 'pubmedy@pubmedy.com';
+            
+
+            try {
+                const searchResponse = await axios.get(`${API_BASE_URL}esearch.fcgi`, {
+                    params: {
+                        db: 'pubmed',
+                        term: searchTerm,
+                        retmax: totalResults,
+                        format: 'json',
+                        email: email
+                    }
+                });
+
+                const ids = searchResponse.data.esearchresult.idlist;
+
+                const summaryResponse = await axios.get(`${API_BASE_URL}esummary.fcgi`, {
+                    params: {
+                        db: 'pubmed',
+                        id: ids.join(','),
+                        format: 'json',
+                        email: email
+                    }
+                });
+
+                const abstractResponse = await axios.get(`${API_BASE_URL}efetch.fcgi`, {
+                    params: {
+                        db: 'pubmed',
+                        id: ids.join(','),
+                        rettype: 'abstract',
+                        retmode: 'xml',
+                        email: email
+                    }
+                });
+
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(abstractResponse.data, "text/xml");
+                const articleSet = xmlDoc.getElementsByTagName("PubmedArticle");
+
+                const allArticles = ids.map(id => {
+                    const articleData = summaryResponse.data.result[id];
+                    const articleXml = Array.from(articleSet).find(article => article.querySelector("PMID").textContent === id);
+                    const abstractText = articleXml ? extractFullAbstract(articleXml) : "Abstract not available";
+
+                    return {
+                        uid: id,
+                        title: articleData.title,
+                        authors: articleData.authors,
+                        fulljournalname: articleData.fulljournalname,
+                        pubdate: articleData.pubdate,
+                        parsedAbstract: abstractText.replace(/<\/?[^>]+(>|$)/g, "")
+                    };
+                });
+
+                let csvContent = "\uFEFF"; // Adding BOM for UTF-8
+                csvContent += "Title;Authors;Journal;Publication Date;PubMed URL;Abstract\r\n";
+
+                allArticles.forEach(article => {
+                    const authorsList = article.authors.map(author => escapeField(author.name)).join(',');
+                    const row = [
+                        escapeField(article.title),
+                        authorsList,
+                        escapeField(article.fulljournalname),
+                        escapeField(article.pubdate),
+                        escapeField(`https://pubmed.ncbi.nlm.nih.gov/${article.uid}`),
+                        escapeField(article.parsedAbstract)
+                    ];
+                    csvContent += row.join(';') + "\r\n";
+                });
+
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                if (link.download !== undefined) {
+                    const url = URL.createObjectURL(blob);
+                    link.setAttribute("href", url);
+                    link.setAttribute("download", "all_pubmed_results_with_abstracts.csv");
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+
+            } catch (error) {
+                console.error('Error during export:', error);
+                alert('An error occurred while exporting the results.');
+            } finally {
+                resetExportButton();
+            }
+        }
+
+        function escapeField(str) {
+            if (str == null) return '';
+            
+            str = str.toString().replace(/"/g, '""');
+            
+            // Wrap in quotes if the field contains semicolons, quotes, or newlines
+            if (str.includes(';') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+                return `"${str}"`;
+            }
+            
+            return str;
+        }
+
+        function resetExportButton() {
+            const exportButton = document.getElementById('exportButton');
+            exportButton.innerHTML = 'Export CSV';
+            exportButton.disabled = false;
+        }
+
+        // Fonction pour réinitialiser l'état initial
+        function resetToInitialState() {
+            document.getElementById('search-container').classList.add('h-screen', 'flex', 'flex-col', 'justify-center');
+            document.getElementById('search-box').classList.add('items-center');
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('totalResults').textContent = '';
+            document.getElementById('topPagination').innerHTML = '';
+            document.getElementById('bottomPagination').innerHTML = '';
+            isInitialState = true;
+        }
+
+        window.onload = resetToInitialState;
+    </script>
+</body>
+</html>
