@@ -163,6 +163,25 @@
 
         function extractFullAbstract(articleXml) {
             const abstractElement = articleXml.querySelector("Abstract");
+            if (!abstractElement) return { text: "Abstract not available" };
+
+            const abstractTexts = abstractElement.querySelectorAll("AbstractText");
+            if (abstractTexts.length === 0) return { text: "Abstract not available" };
+
+            if (abstractTexts.length === 1) {
+                return { text: abstractTexts[0].textContent };
+            } else {
+                return {
+                    sections: Array.from(abstractTexts).map(section => ({
+                        label: section.getAttribute("Label"),
+                        text: section.textContent
+                    }))
+                };
+            }
+        }
+
+        function extractFullAbstractCsv(articleXml) {
+            const abstractElement = articleXml.querySelector("Abstract");
             if (!abstractElement) return "Abstract not available";
 
             const abstractTexts = abstractElement.querySelectorAll("AbstractText");
@@ -180,54 +199,119 @@
 
         const truncate_length = 1000
 
-        function displayResults(articles) {
-            const resultsDiv = document.getElementById('results');
-            resultsDiv.innerHTML = articles.map((article, index) => {
-                const abstractText = article.parsedAbstract;
-                const isShortAbstract = abstractText.length <= truncate_length;
-                const truncatedAbstract = isShortAbstract ? abstractText : abstractText.substring(0, truncate_length) + "...";
-                
-                return `
-                    <div class="bg-white rounded-xl shadow-lg overflow-hidden transform transition duration-500 hover:shadow-xl">
-                        <div class="p-6">
-                            <h3 class="text-xl font-semibold mb-3 text-gray-800">${article.title}</h3>
-                            <p class="text-sm text-gray-600 mb-2">
-                                <span class="font-medium text-indigo-600">Authors:</span> 
-                                ${article.authors.map(author => author.name).join(', ')}
-                            </p>
-                            <p class="text-sm text-gray-600 mb-2">
-                                <span class="font-medium text-indigo-600">Journal:</span> 
-                                ${article.fulljournalname}
-                            </p>
-                            <p class="text-sm text-gray-600 mb-4">
-                                <span class="font-medium text-indigo-600">Publication Date:</span> 
-                                ${article.pubdate}
-                            </p>
-                            <div class="mb-4">
-                                <h4 class="font-semibold text-indigo-600 mb-2">Abstract:</h4>
-                                <p class="text-sm text-gray-700 abstract-content" id="abstract-${index}">${truncatedAbstract}</p>
-                                ${!isShortAbstract ? `<button onclick="toggleAbstract(${index})" class="text-blue-600 hover:text-blue-800 text-sm mt-2 focus:outline-none" id="view-more-${index}">View More</button>` : ''}
-                            </div>
-                            <a href="https://pubmed.ncbi.nlm.nih.gov/${article.uid}" target="_blank" class="inline-block bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition duration-300">View on PubMed</a>
-                        </div>
+        let abstractsData = [];
+
+function displayResults(articles) {
+    abstractsData = articles.map(article => article.parsedAbstract);
+    const resultsDiv = document.getElementById('results');
+    resultsDiv.innerHTML = articles.map((article, index) => {
+        const abstractContent = formatAbstract(article.parsedAbstract);
+        const isShortAbstract = stripHTML(abstractContent).length <= truncate_length;
+        const truncatedAbstract = isShortAbstract ? abstractContent : truncateHTML(abstractContent, truncate_length);
+        
+        return `
+            <div class="bg-white rounded-xl shadow-lg overflow-hidden transform transition duration-500 hover:shadow-xl">
+                <div class="p-6">
+                    <h3 class="text-xl font-semibold mb-3 text-gray-800">${escapeHTML(article.title)}</h3>
+                    <p class="text-sm text-gray-600 mb-2">
+                        <span class="font-medium text-indigo-600">Authors:</span> 
+                        ${escapeHTML(article.authors.map(author => author.name).join(', '))}
+                    </p>
+                    <p class="text-sm text-gray-600 mb-2">
+                        <span class="font-medium text-indigo-600">Journal:</span> 
+                        ${escapeHTML(article.fulljournalname)}
+                    </p>
+                    <p class="text-sm text-gray-600 mb-4">
+                        <span class="font-medium text-indigo-600">Publication Date:</span> 
+                        ${escapeHTML(article.pubdate)}
+                    </p>
+                    <div class="mb-4">
+                        <h4 class="font-semibold text-indigo-600 mb-2">Abstract:</h4>
+                        <p class="text-sm text-gray-700 abstract-content" id="abstract-${index}">${truncatedAbstract}</p>
+                        ${!isShortAbstract ? `<button onclick="toggleAbstract(${index})" class="text-blue-600 hover:text-blue-800 text-sm mt-2 focus:outline-none" id="view-more-${index}">View More</button>` : ''}
                     </div>
-                `;
-            }).join('');
-        }
+                    <a href="https://pubmed.ncbi.nlm.nih.gov/${article.uid}" target="_blank" class="inline-block bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition duration-300">View on PubMed</a>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
 
-        function toggleAbstract(index) {
-            const abstractElement = document.getElementById(`abstract-${index}`);
-            const viewMoreButton = document.getElementById(`view-more-${index}`);
-            const fullAbstract = allArticles[index].parsedAbstract;
+function formatAbstract(abstractData) {
+    if (abstractData.text) {
+        return escapeHTML(abstractData.text);
+    } else if (abstractData.sections) {
+        return abstractData.sections.map(section => 
+            section.label 
+                ? `<span class="font-medium text-indigo-600">${escapeHTML(section.label)}:</span> ${escapeHTML(section.text)}`
+                : escapeHTML(section.text)
+        ).join('<br><br>');
+    }
+    return "Abstract not available";
+}
 
-            if (abstractElement.textContent.length <= truncate_length + 3) {  // truncate_length + "..."
-                abstractElement.innerHTML = fullAbstract;
-                viewMoreButton.textContent = "View Less";
+function escapeHTML(str) {
+    if (typeof str !== 'string') return '';
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function stripHTML(html) {
+    let tmp = document.createElement("DIV");
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || "";
+}
+
+function truncateHTML(html, maxLength) {
+    let tmp = document.createElement("DIV");
+    tmp.innerHTML = html;
+    let text = tmp.textContent || tmp.innerText || "";
+    if (text.length <= maxLength) return html;
+    
+    let truncated = text.substr(0, maxLength);
+    let lastSpaceIndex = truncated.lastIndexOf(' ');
+    truncated = truncated.substr(0, lastSpaceIndex) + '...';
+
+    let truncatedHTML = '';
+    let currentLength = 0;
+    for (let i = 0; i < tmp.childNodes.length; i++) {
+        let node = tmp.childNodes[i];
+        if (node.nodeType === Node.TEXT_NODE) {
+            let nodeText = node.textContent;
+            if (currentLength + nodeText.length > lastSpaceIndex) {
+                truncatedHTML += nodeText.substr(0, lastSpaceIndex - currentLength) + '...';
+                break;
             } else {
-                abstractElement.innerHTML = fullAbstract.substring(0, truncate_length) + "...";
-                viewMoreButton.textContent = "View More";
+                truncatedHTML += nodeText;
+                currentLength += nodeText.length;
             }
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+            truncatedHTML += node.outerHTML;
+            currentLength += node.textContent.length;
         }
+        if (currentLength >= lastSpaceIndex) break;
+    }
+
+    return truncatedHTML;
+}
+
+function toggleAbstract(index) {
+    const abstractElement = document.getElementById(`abstract-${index}`);
+    const viewMoreButton = document.getElementById(`view-more-${index}`);
+    const fullAbstract = formatAbstract(abstractsData[index]);
+
+    if (stripHTML(abstractElement.innerHTML).length <= truncate_length + 3) {  // truncate_length + "..."
+        abstractElement.innerHTML = fullAbstract;
+        viewMoreButton.textContent = "View Less";
+    } else {
+        abstractElement.innerHTML = truncateHTML(fullAbstract, truncate_length);
+        viewMoreButton.textContent = "View More";
+    }
+}
 
         function displayPagination() {
             const topPaginationDiv = document.getElementById('topPagination');
@@ -303,7 +387,7 @@
                 const allArticles = ids.map(id => {
                     const articleData = summaryResponse.data.result[id];
                     const articleXml = Array.from(articleSet).find(article => article.querySelector("PMID").textContent === id);
-                    const abstractText = articleXml ? extractFullAbstract(articleXml) : "Abstract not available";
+                    const abstractText = articleXml ? extractFullAbstractCsv(articleXml) : "Abstract not available";
 
                     return {
                         uid: id,
